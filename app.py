@@ -5,8 +5,48 @@ import asyncio
 
 import websockets
 
+from connect4 import PLAYER1, PLAYER2
 
+import logging
+logging.basicConfig(format="%(message)s", level=logging.DEBUG)
+
+# each handler is assocated with a websocket
 async def handler(websocket):
+    for index,(player, column, row) in enumerate([
+        (PLAYER1, 3, 0),
+        (PLAYER2, 3, 1),
+        (PLAYER1, 4, 0),
+        (PLAYER2, 4, 1),
+        (PLAYER1, 2, 0),
+        (PLAYER2, 1, 0),
+        (PLAYER1, 5, 0),
+    ]):
+        # define my event:
+        event = {
+                "type": "play",
+                "player": player,
+                "column": column,
+                "row": row
+                }
+        jsoned_event = json.dumps(event)
+        print(f"sent : {index} ")
+        await websocket.send(jsoned_event)
+        # sleep half a second
+        await asyncio.sleep(0.5)
+    print("done!")
+
+    # game is done
+    event = {
+            "type": "win",
+            "player": PLAYER1,
+            }
+    jsoned_event = json.dumps(event)
+    await websocket.send(jsoned_event)
+    print("win!")
+
+async def old_handler(websocket):
+    # syntax to print all messages
+    # also does ConnectionClosedOK handling (silences it)
     async for message in websocket:
         print(message)
 

@@ -51,6 +51,9 @@ function showMessage(message) {
   window.setTimeout(() => window.alert(message), 50);
 }
 
+// since this is JS, this is the side of the website
+// so when the website recieves a message from the server
+// the event listener in here will get that message and process it
 function receiveMoves(board, websocket) {
   websocket.addEventListener("message", ({ data }) => {
     const event = JSON.parse(data);

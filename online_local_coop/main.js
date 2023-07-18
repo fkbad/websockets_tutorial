@@ -10,6 +10,9 @@ window.addEventListener("DOMContentLoaded", () => {
   // port specified in main() of `app.py`
   const websocket = new WebSocket("ws://localhost:8001/");
 
+  // adds listener to someone connecting
+  initGame(websocket);
+
   // this calls the sendMoves function which inside has the
   // click event listener. By calling it here in the setup 
   //     (which is setup because this is what `index.html` calls to start scripting)
@@ -24,6 +27,16 @@ window.addEventListener("DOMContentLoaded", () => {
   receiveMoves(board,websocket)
 });
 
+function initGame(websocket) {
+  //function to start a game upon the initialization of a websocket
+  websocket.addEventListener("open", () => {
+    // send an "init" event to the first player who connects to a websocket
+    // message of format {type: "init"} with no other fields
+    const event = { type : "init" };
+    const jsoned_event = JSON.stringify(event)
+    websocket.send(jsoned_event);
+  });
+}
 // function to listen for clicks and send move information when 
 // a click is on a column
 function sendMoves(board, websocket) {
@@ -58,18 +71,32 @@ function receiveMoves(board, websocket) {
   websocket.addEventListener("message", ({ data }) => {
     const event = JSON.parse(data);
     switch (event.type) {
+      case "init":
+        // receiving init from the player/browser
+        // means we want to start the next game!
+        // event.join is the join_key for the start of the game 
+        // const join_link_element = document.querySelector(".join")
+        // join_link_element.href = "?join=" + event.join;
+        document.querySelector(".join").href = "?join=" + event.join;
+
+        // break added because switch cases are fun :)
+        break;
+
       case "play":
         // Update the UI with the move.
         playMove(board, event.player, event.column, event.row);
         break;
+
       case "win":
         showMessage(`Player ${event.player} wins!`);
         // No further messages are expected; close the WebSocket connection.
         websocket.close(1000);
         break;
+
       case "error":
         showMessage(event.message);
         break;
+
       default:
         throw new Error(`Unsupported event type: ${event.type}.`);
     }

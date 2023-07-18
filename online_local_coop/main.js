@@ -28,13 +28,49 @@ window.addEventListener("DOMContentLoaded", () => {
 });
 
 function initGame(websocket) {
+
   //function to start a game upon the initialization of a websocket
   websocket.addEventListener("open", () => {
-    // send an "init" event to the first player who connects to a websocket
-    // message of format {type: "init"} with no other fields
-    const event = { type : "init" };
+    /* 
+     * when a connection is opened, it will either be the initializing player 
+     * OR it will be a player joining a specific game from a link
+     *
+     * thus we need to parse the URL to see if there is anything in it related to the game*/
+
+    // this returns a dictionary
+    const url_params = new URLSearchParams(window.location.search)
+    // search params uses dict-like get syntax
+    // has separate method to check whether or not a field is in the URL
+    const join_key = url_params.get("join")
+    if (join_key) {
+      console.log("wow I have join field!")
+    }
+    // console.log(url_params)
+    // console.log(join_key)
+    // console.log(a)
+
+    // no matter what we are sending an event with init inside
+    let event = {
+      type: "init",
+    }
+    if (join_key) {
+      // send link
+      // specifically event with format:
+      //  {type: "init", join: join_key}
+
+      // printing with variables is good to use multiple args
+      // since doing + concatentation won't print the content of 
+      // larger structs apparently
+      console.log("found join key", join_key, "in URL ")
+
+      // add the join field to the event if we havea key
+      event.join = join_key
+    } else  { // link is just root
+      // create new game
+    }
+    // send init message with join key filled in when necessary
     const jsoned_event = JSON.stringify(event)
-    websocket.send(jsoned_event);
+    websocket.send(jsoned_event)
   });
 }
 // function to listen for clicks and send move information when 

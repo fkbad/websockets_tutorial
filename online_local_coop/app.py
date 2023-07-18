@@ -5,6 +5,7 @@ import secrets
 import json
 
 import asyncio
+from typing import Set, Tuple, List
 
 import websockets
 
@@ -15,8 +16,10 @@ import logging
 
 # module level dict to store all currently active games
 # stored as { join key : (Connect4 Game Object, set of all connected websockets for that game) }
-OPEN_MATCHES = {}
+# CURR_MATCHES: [str,Tuple[Connect4,websockets.__all__]] = {}
+CURR_MATCHES = {}
 
+JOIN_KEY_SIZE = 5
 
 async def start_game(websocket):
     """
@@ -25,27 +28,30 @@ async def start_game(websocket):
     game = Connect4()
     connected_websockets = {websocket}
 
-    # generates random url safe string with 5 bytes
-    join_key = secrets.token_urlsafe(5)
+    # generates random url safe string with arguments' amount of bytes
+    join_key = secrets.token_urlsafe(JOIN_KEY_SIZE)
 
     # log match in match dict
-    OPEN_MATCHES[join_key] = game,connected_websockets
+    print(f"logging join_key in curr_matches with join_key : {join_key}, websocket {websocket}")
+    CURR_MATCHES[join_key] = game,connected_websockets
 
     try:
         await send_new_game(websocket,join_key=join_key)
+        
+        print(CURR_MATCHES)
 
 
         # keep grabbing messages
         print(f"game created with id = {id(join_key)}")
         async for message in websocket:
-            print(message)
+            print(f"player 1 sent :", message)
 
     finally:
         # deleting the entry in the open matches because 
         # when the connection is closed this game and the websocket data structure
         # are no longer valid, but will be kept in memory
-        del OPEN_MATCHES[join_key]
-
+        print(f"removing match with join_key:", join_key)
+        del CURR_MATCHES[join_key]
 
 
 
@@ -66,7 +72,6 @@ async def handler(websocket):
     # game creation is now UI based
     # we don't actually create a connection until we recieve 
     # a message saying that we want to start a game
-    print(f"CALLED HANDLER")
     first_message = await websocket.recv()
 
     event = json.loads(first_message)
@@ -76,9 +81,49 @@ async def handler(websocket):
     # from the beginning
     assert event["type"] == "init"
 
-    # now we know we're starting a game, call on start and let it handle the event_loop
-    await start_game(websocket)
+    # now we check whehter there is a join key
+    join_key = event.get("join")
 
+    if join_key:
+        # second player has joined, let's process it!
+        await join(websocket, join_key=join_key)
+
+    else:
+        # now we know we're starting a game, call on start and let it handle the event_loop
+        await start_game(websocket)
+
+
+
+async def join(websocket, join_key):
+    """
+    this handles the event loop of the second player
+
+    steps are:
+        verify that the join_key is valid
+        if so, then grab the game and list of websockets associated with that game
+
+        update the entry in the CURR_MATCHES to include the websocket of the second playert
+            (the one from function argument)
+
+        once the connection has completed, remove the websocket from the set associated
+        with the game
+    """
+
+    game_socket_tuple = CURR_MATCHES.get(join_key)
+
+    if not game_socket_tuple:
+        # invalid join key provided
+        await send_error(websocket,error=f"invalid join key [{join_key}] provided")
+        return
+    
+    # we know we have a valid game now, since .get returned a tuple
+    game,connected_websockets = game_socket_tuple
+
+    async for message in websocket:
+        print(f"player 2 sent: {message}")
+
+    return 
+    # connected_websockets.
 
 
 # each handler is assocated with a websocket

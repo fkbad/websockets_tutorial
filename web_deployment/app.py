@@ -1,4 +1,9 @@
 #!/usr/bin/env python
+
+# to handle the SIGTERM heroku shutdown signal
+import os
+import signal
+
 # for game id numbering
 import secrets
 
@@ -333,8 +338,20 @@ async def main():
     #   network interfaces : DONT KNOW
     #   port : what port to be listening on
 
-    async with websockets.serve(handler, "", 8001):
-        await asyncio.Future()  # run forever
+    # added event_loop and stop syntax to allow a SIGTERM
+    # to end the serve() loop
+    event_loop = asyncio.get_running_loop()
+    stop = event_loop.create_future()
+    event_loop.add_signal_handler(signal.SIGTERM, stop.set_result, None)
+
+    port = int(os.environ.get("PORT","8001"))
+    async with websockets.serve(handler, "", port):
+        # handle incoming connection on port "port" 
+        # sending connections over to the handler()
+        # meanwhile, this "await stop" line will keep running the serve()
+        # until stop actually returns something and ends
+        # then when stop ends, main finishes execution, shutting down the websocket
+        await stop
 
 if __name__ == "__main__":
     asyncio.run(main())

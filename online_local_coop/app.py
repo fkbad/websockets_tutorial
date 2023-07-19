@@ -209,6 +209,10 @@ async def replay_current_moves(websocket_that_joined_late,game):
     this is to handle the case when a player/spectator opens their connection
     after a move has been made.
     """
+    # https://websockets.readthedocs.io/en/stable/intro/tutorial2.html#solution
+    # replay moves in their version copies the move list
+    # to avoid raising an exception
+    # I want to not update this until I see that exception
     for player,column,row in game.moves:
         event = {
                     "type": "play",

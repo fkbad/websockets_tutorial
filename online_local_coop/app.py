@@ -86,6 +86,11 @@ async def watch(websocket, watch_key):
 
     WATCHING_MATCHES[watch_key] = [game,watching_websockets]
     # TODO maybe change this out for something more comprehensive?
+
+
+    # make sure to replay moves for anyone who joins in after initial creation
+    await replay_current_moves(websocket_that_joined_late=websocket,game=game)
+
     async for message in websocket:
         print(f"\t spectator sent : {message}")
 
@@ -122,6 +127,8 @@ async def join(websocket, join_key):
 
     assert(len(connected_websockets)==2)
 
+    # make sure to replay moves for anyone who joins in after initial creation
+    await replay_current_moves(websocket_that_joined_late=websocket,game=game)
     await play(player_websocket=websocket,game=game,player=PLAYER2,connected_websockets=connected_websockets,game_watch_key=watch_key)
 
 
@@ -195,6 +202,24 @@ async def handler(websocket):
 
 
 # HELPER FUNCTIONS
+
+async def replay_current_moves(websocket_that_joined_late,game):
+    """
+    function to replay all the moves that have currently happened for a particular websocket
+    this is to handle the case when a player/spectator opens their connection
+    after a move has been made.
+    """
+    for player,column,row in game.moves:
+        event = {
+                    "type": "play",
+                    "player": player,
+                    "column": column,
+                    "row": row 
+                }
+
+        jsoned_event = json.dumps(event)
+        await websocket_that_joined_late.send(jsoned_event)
+
 
 def get_col_from_play_event(event) -> int:
     """

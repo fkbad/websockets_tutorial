@@ -18,6 +18,13 @@ import logging
 # stored as { join key : (Connect4 Game Object, set of all connected websockets for that game) }
 # CURR_MATCHES: [str,Tuple[Connect4,websockets.__all__]] = {}
 CURR_MATCHES = {}
+# dict that stores a game object and all websockets that are 
+# spectating that match
+WATCHING_MATCHES = {}
+
+# dict to track relationship between watch keys and join keys
+WATCH_KEY_TO_JOIN_KEY = {}
+JOIN_KEY_TO_WATCH_KEY = {}
 
 JOIN_KEY_SIZE = 5
 
@@ -30,18 +37,21 @@ async def start_game(websocket):
 
     # generates random url safe string with arguments' amount of bytes
     join_key = secrets.token_urlsafe(JOIN_KEY_SIZE)
+    watch_key = secrets.token_urlsafe(JOIN_KEY_SIZE)
 
-    # log match in match dict
-    # print(f"logging join_key in curr_matches with join_key : {join_key}, websocket {websocket}")
     CURR_MATCHES[join_key] = game,connected_websockets
+    # empty set as the player who makes a game is meant to be player 1
+    WATCHING_MATCHES[watch_key] = game,set()
+
+    WATCH_KEY_TO_JOIN_KEY[watch_key] = join_key
+    JOIN_KEY_TO_WATCH_KEY[join_key] = watch_key
 
     try:
-        await send_new_game(websocket,join_key=join_key)
-        
-        print(CURR_MATCHES)
+        # send game information to frontend 
+        await send_new_game(websocket,join_key=join_key,watch_key=watch_key)
 
-
-        await play(player_websocket=websocket,game=game,player=PLAYER1,connected_websockets=connected_websockets)
+        # player 1 starts playing
+        await play(player_websocket=websocket,game=game,player=PLAYER1,connected_websockets=connected_websockets,game_watch_key=watch_key)
     finally:
         # deleting the entry in the open matches because 
         # when the connection is closed this game and the websocket data structure
@@ -49,6 +59,35 @@ async def start_game(websocket):
         print(f"removing match with join_key:", join_key)
         del CURR_MATCHES[join_key]
 
+        # if at any point this player disconnects, we want to also remove this game
+        # from the watchable matches
+        del WATCHING_MATCHES[watch_key]
+
+
+async def watch(websocket, watch_key):
+    """
+    takes in a websocket connection that has a watch_key from the
+    parsed URI.
+
+    adds the websocket to the entry in WATCHING_MATCHES so it can be
+    in the loop for game updates
+    """
+
+    game_socket_tuple = WATCHING_MATCHES.get(watch_key)
+
+    if game_socket_tuple is None:
+        await send_error(websocket,error=f"invalid watch key [{watch_key}] provided")
+        return
+
+    # else we have a valid watch key with an assocated game
+    game,watching_websockets = game_socket_tuple
+
+    watching_websockets.add(websocket)
+
+    WATCHING_MATCHES[watch_key] = [game,watching_websockets]
+    # TODO maybe change this out for something more comprehensive?
+    async for message in websocket:
+        print(f"\t spectator sent : {message}")
 
 async def join(websocket, join_key):
     """
@@ -77,15 +116,19 @@ async def join(websocket, join_key):
     connected_websockets.add(websocket)
 
     CURR_MATCHES[join_key] = [game,connected_websockets]
+    # grab the assocated watch jey to play can figure out 
+    # which (if any) spectators to update
+    watch_key = JOIN_KEY_TO_WATCH_KEY[join_key]
+
     assert(len(connected_websockets)==2)
 
-    await play(player_websocket=websocket,game=game,player=PLAYER2,connected_websockets=connected_websockets)
+    await play(player_websocket=websocket,game=game,player=PLAYER2,connected_websockets=connected_websockets,game_watch_key=watch_key)
 
 
     return 
     # connected_websockets.
 
-async def play(player_websocket,game,player,connected_websockets):
+async def play(player_websocket,game,player,connected_websockets,game_watch_key):
     """
     arbitrarily takes in a game, and a particular player
     then takes in any message from the player_websocket 
@@ -97,7 +140,6 @@ async def play(player_websocket,game,player,connected_websockets):
     """
     async for message in player_websocket:
         event = json.loads(message)
-        event_type = event.get("type")
 
         column = get_col_from_play_event(event)
 
@@ -111,10 +153,48 @@ async def play(player_websocket,game,player,connected_websockets):
         # if getting here, then no runtime errors occurred, 
         # thus we have a valid play from a player on their turn
         winner = game.winner
-        await send_move(connected_websockets,player=player,row=landing_row,column=column)
+        await send_move(connected_websockets,player=player,row=landing_row,column=column,game_watch_key=game_watch_key)
 
         if winner:
-            await send_winner(connected_websockets,winner=winner)
+            await send_winner(connected_websockets,winner=winner,game_watch_key=game_watch_key)
+
+
+async def handler(websocket):
+    # game creation is now UI based
+    # we don't actually create a connection until we recieve 
+    # a message saying that we want to start a game
+    first_message = await websocket.recv()
+
+    event = json.loads(first_message)
+    print("event received", event)
+
+    # should only ever recieve an opening connection message
+    # from the beginning
+    assert event["type"] == "init"
+
+    # now we check whehter there is a join key
+    join_key = event.get("join")
+    watch_key = event.get("watch")
+
+    if join_key:
+        print(f"joining...")
+        # second player has joined, let's process it!
+        await join(websocket, join_key=join_key)
+
+    elif watch_key:
+        # second player has joined, let's process it!
+        print(f"watching...")
+        await watch(websocket, watch_key=watch_key)
+    else:
+        # now we know we're starting a game, call on start and let it handle the event_loop
+        print(f"starting...")
+        await start_game(websocket)
+
+
+
+
+
+# HELPER FUNCTIONS
 
 def get_col_from_play_event(event) -> int:
     """
@@ -142,38 +222,6 @@ def get_col_from_play_event(event) -> int:
 
     return column
 
-
-
-async def handler(websocket):
-    # game creation is now UI based
-    # we don't actually create a connection until we recieve 
-    # a message saying that we want to start a game
-    first_message = await websocket.recv()
-
-    event = json.loads(first_message)
-    print("event received", event)
-
-    # should only ever recieve an opening connection message
-    # from the beginning
-    assert event["type"] == "init"
-
-    # now we check whehter there is a join key
-    join_key = event.get("join")
-
-    if join_key:
-        # second player has joined, let's process it!
-        await join(websocket, join_key=join_key)
-
-    else:
-        # now we know we're starting a game, call on start and let it handle the event_loop
-        await start_game(websocket)
-
-
-
-
-
-
-
 async def send_error(websocket,error):
     """
     sends the given error via the websocket
@@ -189,7 +237,7 @@ async def send_error(websocket,error):
     jsoned_event = json.dumps(event)
     await websocket.send(jsoned_event)
 
-async def send_move(connected_websockets,player,row,column):
+async def send_move(connected_websockets,player,row,column,game_watch_key):
     """
     after validating the row and column, sends a move with that coordinate
     to all given websockets
@@ -205,7 +253,11 @@ async def send_move(connected_websockets,player,row,column):
     for websocket in connected_websockets:
         await websocket.send(jsoned_event)
 
-async def send_winner(connected_websockets,winner):
+    _,watching_websockets = WATCHING_MATCHES[game_watch_key]
+    
+    websockets.broadcast(watching_websockets,jsoned_event)
+
+async def send_winner(connected_websockets,winner,game_watch_key):
     """
     sends a correctly formatted event for the winner winning in a game of connect 4
 
@@ -224,130 +276,25 @@ async def send_winner(connected_websockets,winner):
     jsoned_event = json.dumps(event)
     for websocket in connected_websockets:
         await websocket.send(jsoned_event)
+    _,watching_websockets = WATCHING_MATCHES[game_watch_key]
+    
+    websockets.broadcast(watching_websockets,jsoned_event)
 
-async def send_new_game(websocket,join_key):
+async def send_new_game(websocket,join_key,watch_key):
     """
     sends the initGame messgae with a join created upon the first player opening the websocket
     """
     event = {
             "type": "init",
             "join": join_key,
+            "watch": watch_key
             }
 
     jsoned_event = json.dumps(event)
-    print(f"sending jsoned_event : {jsoned_event}")
+    print(f"sending event {jsoned_event}")
     await websocket.send(jsoned_event)
 
 # END OF HELPER FUNCTIONS
-
-async def old_handler(websocket):
-    # syntax to print all messages
-    # also does ConnectionClosedOK handling (silences it)
-    async for message in websocket:
-        print(message)
-
-    return
-    # this is also where you do connection error handling 
-    while True:
-        try:
-            message = await websocket.recv()
-        except websockets.ConnectionClosedOK:
-            # if the client closes connection while I was waiting for a message
-            # with `websocket.recv()` then this is considered fine and we error
-            
-            # adding the exception clears the log and lets us expose more meaningful errors
-            print("connection closed :3")
-            break
-
-        # if successfully received a message
-        print(message)
-
-
-
-# OLD METHODS
-
-
-# each handler is assocated with a websocket
-# handler takes in a message from the browser game
-# that message is only going to be a move
-# {"type": "play", column: int}
-# then we need to play that move on the board, get the response
-# from the game, then send that information back over
-async def old_part1_handler(websocket):
-
-    game = Connect4()
-    curr_player = PLAYER1
-
-    # await test_sending(websocket,game=game)
-
-    async for message in websocket:
-        event = json.loads(message)
-        event_type = event.get("type")
-
-        if not event_type:
-            raise ValueError("client should not be ever sending a message without a type")
-
-        if event_type != "play":
-            raise ValueError(f"client sent message with non-play type: {event_type}")
-
-        column = event.get("column")
-        if column is None:
-            print(f"col val : {column}")
-            raise ValueError(f"no column given")
-
-        try:
-            landing_row = game.play(curr_player,column) 
-        except RuntimeError as exc:
-            await send_error(websocket,error=exc)
-            continue
-
-        winner = game.winner
-
-        await send_move(websocket,player=curr_player,row=landing_row,column=column)
-
-        if winner:
-            await send_winner(websocket,winner=winner)
-        
-        # swap players
-        if curr_player == PLAYER1:
-            curr_player = PLAYER2
-        elif curr_player == PLAYER2:
-            curr_player = PLAYER1
-async def test_sending(websocket,game: Connect4):
-    curr_player = PLAYER1
-    for index,(player, column, row) in enumerate([
-    (PLAYER1, 3, 0),
-    (PLAYER2, 3, 1),
-    (PLAYER1, 4, 0),
-    (PLAYER2, 4, 1),
-    (PLAYER1, 2, 0),
-    (PLAYER2, 1, 0),
-    (PLAYER1, 5, 0),
-    ]):
-        # define my event:
-        event = {
-                "player": player,
-                "type": "play",
-                "column": column,
-                "row": row
-                }
-        jsoned_event = json.dumps(event)
-        print(f"sent : {index} ")
-        await websocket.send(jsoned_event)
-        # sleep half a second
-        interval = .01
-        await asyncio.sleep(interval)
-    print("done!")
-
-    # # game is done
-    # event = {
-    #         "type": "win",
-    #         "player": PLAYER1,
-    #         }
-    # jsoned_event = json.dumps(event)
-    # await websocket.send(jsoned_event)
-    # print("win!")
-
 
 # MAIN
 

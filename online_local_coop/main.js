@@ -24,7 +24,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // set up listener for messages being send from the website
   // think of it as recieveMoves from browser
-  receiveMoves(board,websocket)
+  recieveMessages(board,websocket)
 });
 
 function initGame(websocket) {
@@ -42,13 +42,10 @@ function initGame(websocket) {
     // search params uses dict-like get syntax
     // has separate method to check whether or not a field is in the URL
     const join_key = url_params.get("join")
+    const watch_key = url_params.get("watch")
     if (join_key) {
       console.log("wow I have join field!")
     }
-    // console.log(url_params)
-    // console.log(join_key)
-    // console.log(a)
-
     // no matter what we are sending an event with init inside
     let event = {
       type: "init",
@@ -65,7 +62,11 @@ function initGame(websocket) {
 
       // add the join field to the event if we havea key
       event.join = join_key
-    } else  { // link is just root
+    } else if (watch_key) {
+      // tell the server that I have someone watching with this watch key
+      event.watch = watch_key
+    }
+    else  { // link is just root
       // create new game
     }
     // send init message with join key filled in when necessary
@@ -103,17 +104,21 @@ function showMessage(message) {
 // since this is JS, this is the side of the website
 // so when the website recieves a message from the server
 // the event listener in here will get that message and process it
-function receiveMoves(board, websocket) {
+function recieveMessages(board, websocket) {
   websocket.addEventListener("message", ({ data }) => {
     const event = JSON.parse(data);
+    console.log(event)
     switch (event.type) {
       case "init":
         // receiving init from the player/browser
         // means we want to start the next game!
+        //
         // event.join is the join_key for the start of the game 
-        // const join_link_element = document.querySelector(".join")
-        // join_link_element.href = "?join=" + event.join;
+        // event.watch is the watch_key for the start of the game 
+        //
+        // adds the link with the join code appened to the join button
         document.querySelector(".join").href = "?join=" + event.join;
+        document.querySelector(".watch").href = "?watch=" + event.watch;
 
         // break added because switch cases are fun :)
         break;

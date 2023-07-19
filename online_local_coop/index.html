@@ -4,16 +4,14 @@
     <title>Connect Four</title>
   </head>
   <body>
-    <div>
-      <!-- this link element has two classes, action and join -->
-      <!-- thus we can select on the join in `index.html` -->
-      <!-- with document.querySelector(".join"), as doing `.xxx` returns all elements in the join class -->
+    <div class="actions">
 
-      <!-- YOU NEED TO INCLUDE CLASS= TO ACTUALLY MAKE A CLASS LMAO -->
-      <a class="action" href="/">Navigate to Root</a>
-      <!-- code to open in new tab of same window -->
-      <!-- <a class="action join" target=_blank href="">Join Game</a> -->
-      <a class="action join" target=NewGameWindow href="">Join Game</a>
+      <a class="action new" href="/">New Game</a>
+
+      <a class="action join" target=_blank href="">Join Current Game</a>
+
+      <a class="action watch" target=_blank href="">Watch Current Game</a>
+
     </div>
     <div class="board"></div>
     <script src="main.js" type="module"></script>

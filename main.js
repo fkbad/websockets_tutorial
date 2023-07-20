@@ -22,6 +22,12 @@ window.addEventListener("DOMContentLoaded", () => {
   console.log("webocket address calculated as:", websocket_address)
   const websocket = new WebSocket(websocket_address);
 
+
+  //information gathering for getting reload button to work:
+  const url      = window.location.href;
+  console.log("url =",url)
+
+
   // adds listener to someone connecting
   initGame(websocket);
 

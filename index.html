@@ -2,6 +2,10 @@
 <html lang="en">
   <head>
     <title>Connect Four</title>
+    <!-- no type=module since I don't understand it yet -->
+    <!-- trying to load this script ahead of time  -->
+    <!-- so the functions are callable in the body -->
+    <script src="helper.js"></script>
   </head>
   <body>
     <div class="actions">
@@ -14,12 +18,18 @@
       <a class="action new_game" onClick="window.location.href=window.location.href" >New Game</a>
       <!-- <a class="action new_game" target=_blank onClick="window.location.href=window.location.href" >New Game</a> -->
 
-      <a class="action join" target=_blank href="">Join Current Game</a>
+      <a class="action join new_tab" target=_blank href="">Join Current Game in New Tab</a>
+      <a class="action join copy" onclick="please_copy_join_link()".join").href)">Copy Join Link</a>
 
       <a class="action watch" target=_blank href="">Watch Current Game</a>
 
+      <a class="action watch copy" onclick="please_copy_watch_link()".watch").href)">Copy watch Link</a>
     </div>
     <div class="board"></div>
     <script src="main.js" type="module"></script>
+    <input type="text" value="Hello World" id="myInput">
+    <button onclick="myFunction()">Copy text</button>
+
   </body>
+
 </html> 

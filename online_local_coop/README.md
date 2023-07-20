@@ -32,6 +32,15 @@
 	"player": "red"
 }
 
+---
+{ "type": "init" }
+{ "type": "init", "join": "abDVjw" }
+{ "type": "init", "watch": "wohgA" }
+{ "type": "error", "message": "This slot is full." }
+{ "type": "play" "player": "red" "column": 3 }
+{ "type": "play", "player": "red", "column": 3, "row": 0 }
+{ "type": "win", "player": "red" }
+
 
 ## Event Types
 ### from the browser only:

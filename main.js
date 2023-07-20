@@ -1,5 +1,15 @@
 import { createBoard, playMove } from "./connect4.js";
 
+function getWebSocketServer() {
+  if (window.location.host === "fkbad.github.io") {
+    return "wss://sylv-connect4-ba23863cf42a.herokuapp.com/";
+  } else if (window.location.host === "localhost:8000") {
+    return "ws://localhost:8001/";
+  } else {
+    throw new Error(`Unsupported host: ${window.location.host}`);
+  }
+}
+
 // overall initializer, the bootstrap or "main"
 window.addEventListener("DOMContentLoaded", () => {
   // Initialize the UI.
@@ -8,7 +18,9 @@ window.addEventListener("DOMContentLoaded", () => {
 
   // Open the WebSocket connection and register event handlers.
   // port specified in main() of `app.py`
-  const websocket = new WebSocket("ws://localhost:8001/");
+  const websocket_address = getWebSocketServer()
+  console.log("webocket address calculated as:", websocket_address)
+  const websocket = new WebSocket(websocket_address);
 
   // adds listener to someone connecting
   initGame(websocket);
